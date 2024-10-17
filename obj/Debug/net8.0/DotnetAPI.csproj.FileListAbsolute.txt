@@ -79,3 +79,4 @@
 /Users/gabrielenke/dev/studies/dotnet-course-code/DotnetAPI/bin/Debug/net8.0/Microsoft.Extensions.Logging.dll
 /Users/gabrielenke/dev/studies/dotnet-course-code/DotnetAPI/bin/Debug/net8.0/Microsoft.Extensions.Logging.Abstractions.dll
 /Users/gabrielenke/dev/studies/dotnet-course-code/DotnetAPI/bin/Debug/net8.0/Microsoft.Extensions.Options.dll
+/Users/gabrielenke/dev/studies/dotnet-course-code/DotnetAPI/bin/Debug/net8.0/Microsoft.AspNetCore.Authentication.JwtBearer.dll
