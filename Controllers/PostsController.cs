@@ -12,7 +12,7 @@ namespace DotnetAPI.Controllers
     [Route("[controller]")]
     public class PostsController(IConfiguration config) : ControllerBase
     {
-        private readonly DataContextDapper _dapper = new(config);
+        private readonly DataContextDapper _dapper;
 
         [HttpGet("GetPosts/{postId?}/{userId?}/{searchParam?}")]
         public IEnumerable<PostModel> GetPosts(
@@ -96,7 +96,7 @@ namespace DotnetAPI.Controllers
                 return Ok();
             }
 
-            throw new Exception("Failed to upsert post!");
+            throw new InvalidOperationException("Failed to upsert post!");
         }
 
         [HttpDelete("DeletePost/{postId}")]
@@ -119,7 +119,7 @@ namespace DotnetAPI.Controllers
                 return Ok();
             }
 
-            throw new Exception("Failed to delete post!");
+            throw new InvalidOperationException("Failed to delete post!");
         }
     }
 }

@@ -6,7 +6,7 @@ namespace DotnetAPI.Data
 {
     class DataContextDapper
     {
-        public string DefaultConnection = "DefaultConnection";
+        private readonly string DefaultConnection = "DefaultConnection";
         private readonly IConfiguration _config;
 
         public DataContextDapper(IConfiguration config)

@@ -1,11 +1,12 @@
 using System.Data;
+using AutoMapper;
 using Dapper;
 using DotnetAPI.Data;
 using DotnetAPI.Dtos;
 using DotnetAPI.Helpers;
+using DotnetAPI.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Data.SqlClient;
 
 namespace DotnetAPI.Controllers
 {
@@ -18,10 +19,24 @@ namespace DotnetAPI.Controllers
 
         private readonly AuthHelper _authHelper;
 
+        private readonly ReusableSql _reusableSql;
+
+        private readonly IMapper _mapper;
+
         public AuthController(IConfiguration config)
         {
             _dapper = new DataContextDapper(config);
+
             _authHelper = new AuthHelper(config);
+
+            _reusableSql = new ReusableSql(config);
+
+            _mapper = new Mapper(
+                new MapperConfiguration(cfg =>
+                {
+                    cfg.CreateMap<RegisterDto, UserModel>();
+                })
+            );
         }
 
         [AllowAnonymous]
@@ -41,7 +56,7 @@ namespace DotnetAPI.Controllers
                     dynamicParameters
                 );
 
-                if (existingUsers.Count() == 0)
+                if (!existingUsers.Any())
                 {
                     LoginDto userForSetPassword = new LoginDto()
                     {
@@ -51,51 +66,22 @@ namespace DotnetAPI.Controllers
 
                     if (_authHelper.SetPassword(userForSetPassword))
                     {
-                        string sqlAddUser =
-                            @"EXEC dbo.spUser_Upsert 
-                                @FirstName = @FirstNameParam, 
-                                @LastName = @LastNameParam, 
-                                @Email = @EmailParam, 
-                                @Active = 1, 
-                                @JobTitle = @JobTitleParam, 
-                                @Department = @DepartmentParam, 
-                                @Salary = @SalaryParam";
+                        UserModel user = _mapper.Map<UserModel>(registerDto);
+                        user.Active = true;
 
-                        dynamicParameters.Add(
-                            "@FirstNameParam",
-                            registerDto.FirstName,
-                            DbType.String
-                        );
-                        dynamicParameters.Add(
-                            "@LastNameParam",
-                            registerDto.LastName,
-                            DbType.String
-                        );
-                        dynamicParameters.Add(
-                            "@JobTitleParam",
-                            registerDto.JobTitle,
-                            DbType.String
-                        );
-                        dynamicParameters.Add(
-                            "@DepartmentParam",
-                            registerDto.Department,
-                            DbType.String
-                        );
-                        dynamicParameters.Add("@SalaryParam", registerDto.Salary, DbType.Decimal);
-
-                        if (_dapper.ExecuteSqlWithParameters(sqlAddUser, dynamicParameters))
+                        if (_reusableSql.UpsertUser(user))
                         {
                             return Ok();
                         }
-                        throw new Exception("Failed to Add User.");
+                        return StatusCode(500, "Failed to Add User.");
                     }
-                    throw new Exception("Failed to Register user.");
+                    throw new InvalidOperationException("Failed to Register user.");
                 }
 
-                throw new Exception("User with this email already exists!");
+                throw new InvalidOperationException("User with this email already exists!");
             }
 
-            throw new Exception("Password do not match!");
+            throw new ArgumentException("Passwords do not match!");
         }
 
         [HttpPut("ResetPassword")]
@@ -106,11 +92,12 @@ namespace DotnetAPI.Controllers
                 return Ok();
             }
 
-            throw new Exception("Failed to Update Password!");
+            return StatusCode(500, "Failed to Update Password!");
         }
 
         [AllowAnonymous]
         [HttpPost("Login")]
+        [ProducesResponseType(typeof(Dictionary<string, string>), 200)]
         public IActionResult LoginUser(LoginDto loginDto)
         {
             string sqlForHashAndSalt = @"dbo.spLoginConfirmation_Get @Email = @EmailParam";
@@ -148,6 +135,7 @@ namespace DotnetAPI.Controllers
         }
 
         [HttpGet("RefreshToken")]
+        [ProducesResponseType(typeof(Dictionary<string, string>), 200)]
         public IActionResult RefreshToken()
         {
             DynamicParameters dynamicParameters = new DynamicParameters();

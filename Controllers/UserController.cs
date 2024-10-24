@@ -1,16 +1,20 @@
 using System.Data;
 using Dapper;
 using DotnetAPI.Data;
+using DotnetAPI.Helpers;
 using DotnetAPI.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace DotnetAPI.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("[controller]")]
     public class UserController(IConfiguration config) : ControllerBase
     {
         private readonly DataContextDapper _dapper = new(config);
+        private readonly ReusableSql _reusableSql = new(config);
 
         [HttpGet("GetUsers/{userId?}/{isActive?}")]
         public IEnumerable<UserModel> GetUsers(int userId, bool isActive)
@@ -46,33 +50,12 @@ namespace DotnetAPI.Controllers
         [HttpPut("upsertUser")]
         public IActionResult UpsertUser(UserModel user)
         {
-            DynamicParameters dynamicParameters = new();
-            dynamicParameters.Add("@FirstNameParam", user.FirstName, DbType.String);
-            dynamicParameters.Add("@LastNameParam", user.LastName, DbType.String);
-            dynamicParameters.Add("@EmailParam", user.Email, DbType.String);
-            dynamicParameters.Add("@ActiveParam", user.Active, DbType.Boolean);
-            dynamicParameters.Add("@JobTitleParam", user.JobTitle, DbType.String);
-            dynamicParameters.Add("@DepartmentParam", user.Department, DbType.String);
-            dynamicParameters.Add("@SalaryParam", user.Salary, DbType.Decimal);
-            dynamicParameters.Add("@UserIdParam", user.UserId, DbType.Int32);
-
-            string sql =
-                @"EXEC dbo.spUser_Upsert 
-                @FirstName = @FirstNameParam ,
-                @LastName = @LastNameParam ,
-                @Email = @EmailParam,
-                @Active = @ActiveParam,
-                @JobTitle = @JobTitleParam,
-                @Department = @DepartmentParam,
-                @Salary = @SalaryParam,
-                @UserId = @UserIdParam";
-
-            if (_dapper.ExecuteSqlWithParameters(sql, dynamicParameters))
+            if (_reusableSql.UpsertUser(user))
             {
                 return Ok();
             }
 
-            throw new Exception("Failed to Update User");
+            throw new InvalidOperationException("Failed to Update User");
         }
 
         [HttpDelete("DeleteUser/{userId}")]
@@ -88,7 +71,7 @@ namespace DotnetAPI.Controllers
                 return Ok();
             }
 
-            throw new Exception("Failed to Delete User");
+            throw new InvalidOperationException("Failed to Delete User");
         }
     }
 }

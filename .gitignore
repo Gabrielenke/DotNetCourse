@@ -1,0 +1,35 @@
+# Ignore Visual Studio temporary files, build results, and
+# user-specific files
+.vscode/
+*.user
+*.suo
+*.log
+*.tlog
+*.vscode
+
+# Ignore .NET build files
+bin/
+obj/
+out/
+
+# Ignore appsettings files containing sensitive information
+appsettings.json
+appsettings.Development.json
+
+# Ignore publish output
+publish/
+*.publishsettings
+
+# Ignore environment-specific files
+.env
+
+# Ignore Rider/JetBrains files
+.idea/
+
+# Ignore backup and merge files
+*~ 
+*.orig
+*.bak
+
+# Ignore package management files
+node_modules/
