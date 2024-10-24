@@ -12,7 +12,7 @@ namespace DotnetAPI.Controllers
     [Route("[controller]")]
     public class PostsController(IConfiguration config) : ControllerBase
     {
-        private readonly DataContextDapper _dapper;
+        private readonly DataContextDapper _dapper = new(config);
 
         [HttpGet("GetPosts/{postId?}/{userId?}/{searchParam?}")]
         public IEnumerable<PostModel> GetPosts(
