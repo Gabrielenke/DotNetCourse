@@ -1,5 +1,4 @@
 using System.Text;
-using DotnetAPI.Repositories;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 
@@ -39,8 +38,6 @@ builder.Services.AddCors(
         );
     }
 );
-
-builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 string? tokenKeyString = builder.Configuration.GetSection("AppSettings:TokenKey").Value;
 

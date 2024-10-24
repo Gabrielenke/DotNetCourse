@@ -1,16 +1,11 @@
 using System.Data;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Security.Cryptography;
-using System.Text;
+using Dapper;
 using DotnetAPI.Data;
 using DotnetAPI.Dtos;
 using DotnetAPI.Helpers;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Cryptography.KeyDerivation;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
-using Microsoft.IdentityModel.Tokens;
 
 namespace DotnetAPI.Controllers
 {
@@ -35,65 +30,60 @@ namespace DotnetAPI.Controllers
         {
             if (registerDto.Password == registerDto.PasswordConfirm)
             {
-                string sqlCheckUserExists =
-                    "SELECT Email FROM dbo.Auth WHERE Email = '" + registerDto.Email + "'";
+                DynamicParameters dynamicParameters = new DynamicParameters();
 
-                IEnumerable<string> existingUsers = _dapper.LoadData<string>(sqlCheckUserExists);
+                dynamicParameters.Add("@EmailParam", registerDto.Email, DbType.String);
+
+                string sqlCheckUserExists = "SELECT Email FROM dbo.Auth WHERE Email = @EmailParam";
+
+                IEnumerable<string> existingUsers = _dapper.LoadDataWithParameters<string>(
+                    sqlCheckUserExists,
+                    dynamicParameters
+                );
 
                 if (existingUsers.Count() == 0)
                 {
-                    byte[] passwordSalt = new byte[128 / 8];
-                    using (RandomNumberGenerator rng = RandomNumberGenerator.Create())
+                    LoginDto userForSetPassword = new LoginDto()
                     {
-                        rng.GetNonZeroBytes(passwordSalt);
-                    }
+                        Email = registerDto.Email,
+                        Password = registerDto.Password,
+                    };
 
-                    byte[] passwordHash = _authHelper.GetPasswordHash(
-                        registerDto.Password,
-                        passwordSalt
-                    );
-
-                    string sqlAddAuth =
-                        @"INSERT INTO dbo.Auth (Email,PasswordHash,PasswordSalt) VALUES ('"
-                        + registerDto.Email
-                        + "', @PasswordHash,@PasswordSalt)";
-
-                    List<SqlParameter> sqlParameters = new List<SqlParameter>();
-
-                    SqlParameter passwordSaltParameter = new SqlParameter(
-                        "@PasswordSalt",
-                        SqlDbType.VarBinary
-                    );
-                    passwordSaltParameter.Value = passwordSalt;
-
-                    SqlParameter passwordHashParameter = new SqlParameter(
-                        "@PasswordHash",
-                        SqlDbType.VarBinary
-                    );
-                    passwordHashParameter.Value = passwordHash;
-
-                    sqlParameters.Add(passwordSaltParameter);
-                    sqlParameters.Add(passwordHashParameter);
-
-                    if (_dapper.ExecuteSqlWithParameters(sqlAddAuth, sqlParameters))
+                    if (_authHelper.SetPassword(userForSetPassword))
                     {
                         string sqlAddUser =
-                            @"
-                            INSERT INTO dbo.Users (
-                                    [FirstName],
-                                    [LastName],
-                                    [Email],
-                                    [Active]
-                                ) VALUES ("
-                            + "  '"
-                            + registerDto.FirstName
-                            + "',  '"
-                            + registerDto.LastName
-                            + "',  '"
-                            + registerDto.Email
-                            + "',1)";
+                            @"EXEC dbo.spUser_Upsert 
+                                @FirstName = @FirstNameParam, 
+                                @LastName = @LastNameParam, 
+                                @Email = @EmailParam, 
+                                @Active = 1, 
+                                @JobTitle = @JobTitleParam, 
+                                @Department = @DepartmentParam, 
+                                @Salary = @SalaryParam";
 
-                        if (_dapper.ExecuteSql(sqlAddUser))
+                        dynamicParameters.Add(
+                            "@FirstNameParam",
+                            registerDto.FirstName,
+                            DbType.String
+                        );
+                        dynamicParameters.Add(
+                            "@LastNameParam",
+                            registerDto.LastName,
+                            DbType.String
+                        );
+                        dynamicParameters.Add(
+                            "@JobTitleParam",
+                            registerDto.JobTitle,
+                            DbType.String
+                        );
+                        dynamicParameters.Add(
+                            "@DepartmentParam",
+                            registerDto.Department,
+                            DbType.String
+                        );
+                        dynamicParameters.Add("@SalaryParam", registerDto.Salary, DbType.Decimal);
+
+                        if (_dapper.ExecuteSqlWithParameters(sqlAddUser, dynamicParameters))
                         {
                             return Ok();
                         }
@@ -108,22 +98,32 @@ namespace DotnetAPI.Controllers
             throw new Exception("Password do not match!");
         }
 
+        [HttpPut("ResetPassword")]
+        public IActionResult ResetPassword(LoginDto userForSetPassword)
+        {
+            if (_authHelper.SetPassword(userForSetPassword))
+            {
+                return Ok();
+            }
+
+            throw new Exception("Failed to Update Password!");
+        }
+
         [AllowAnonymous]
         [HttpPost("Login")]
         public IActionResult LoginUser(LoginDto loginDto)
         {
-            string sqlForHashAndSalt =
-                @"
-            SELECT 
-            [PasswordHash],[PasswordSalt]
-             FROM dbo.Auth 
-             WHERE Email = '"
-                + loginDto.Email
-                + "'";
+            string sqlForHashAndSalt = @"dbo.spLoginConfirmation_Get @Email = @EmailParam";
 
-            LoginConfirmationDto userForConfirmation = _dapper.LoadDataSingle<LoginConfirmationDto>(
-                sqlForHashAndSalt
-            );
+            DynamicParameters dynamicParameters = new DynamicParameters();
+
+            dynamicParameters.Add("@EmailParam", loginDto.Email, DbType.String);
+
+            LoginConfirmationDto userForConfirmation =
+                _dapper.LoadDataSingleWithParameters<LoginConfirmationDto>(
+                    sqlForHashAndSalt,
+                    dynamicParameters
+                );
 
             byte[] passwordHash = _authHelper.GetPasswordHash(
                 loginDto.Password,
@@ -138,14 +138,9 @@ namespace DotnetAPI.Controllers
                 }
             }
 
-            string sqlGetUserId =
-                @"SELECT UserId 
-            FROM dbo.Users 
-            WHERE Email = '"
-                + loginDto.Email
-                + "'";
+            string sqlGetUserId = @"SELECT UserId FROM dbo.Users WHERE Email = @EmailParam";
 
-            int userId = _dapper.LoadDataSingle<int>(sqlGetUserId);
+            int userId = _dapper.LoadDataSingleWithParameters<int>(sqlGetUserId, dynamicParameters);
 
             return Ok(
                 new Dictionary<string, string> { { "token", _authHelper.CreateToken(userId) } }
@@ -155,11 +150,16 @@ namespace DotnetAPI.Controllers
         [HttpGet("RefreshToken")]
         public IActionResult RefreshToken()
         {
-            string userId = User.FindFirst("userId")?.Value + "";
+            DynamicParameters dynamicParameters = new DynamicParameters();
 
-            string userIdSql = "SELECT UserId FROM dbo.Users Where UserId = " + userId;
+            dynamicParameters.Add("@UserId", User.FindFirst("userId")?.Value, DbType.Int32);
 
-            int userIdFromDb = _dapper.LoadDataSingle<int>(userIdSql);
+            string userIdSql = "SELECT UserId FROM dbo.Users Where UserId = @UserId";
+
+            int userIdFromDb = _dapper.LoadDataSingleWithParameters<int>(
+                userIdSql,
+                dynamicParameters
+            );
 
             return Ok(
                 new Dictionary<string, string>

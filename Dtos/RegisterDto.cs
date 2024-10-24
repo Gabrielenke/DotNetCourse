@@ -7,6 +7,9 @@ namespace DotnetAPI.Dtos
         public string PasswordConfirm { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
+        public string JobTitle { get; set; }
+        public string Department { get; set; }
+        public decimal Salary { get; set; }
 
         public RegisterDto()
         {
@@ -15,6 +18,8 @@ namespace DotnetAPI.Dtos
             PasswordConfirm ??= "";
             FirstName ??= "";
             LastName ??= "";
+            JobTitle ??= "";
+            Department ??= "";
         }
     }
 }

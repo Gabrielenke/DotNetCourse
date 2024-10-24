@@ -7,12 +7,17 @@ namespace DotnetAPI.Models
         public string LastName { get; set; }
         public string Email { get; set; }
         public bool Active { get; set; }
+        public string JobTitle { get; set; }
+        public string Department { get; set; }
+        public decimal Salary { get; set; }
 
         public UserModel()
         {
             FirstName ??= "";
             LastName ??= "";
             Email ??= "";
+            JobTitle ??= "";
+            Department ??= "";
         }
     }
 }
